@@ -1,35 +1,40 @@
-import random
-import pandas as pd
-import numpy as np
+from flask import Flask, request, jsonify
+import joblib
+import pefile
 
-def load_data():
-    # Load the feature and label files
-    features = np.load('features.npy')
-    labels = np.load('labels.npy')
-    return features, labels
- 
-# Simulate datasets for malware and benign files
-def generate_dataset(num_samples, label):
-    data = []
-    for _ in range(num_samples):
-        extracted_features = [
-            random.randint(1, 10),  # num_sections
-            random.randint(5, 50), # num_imports
-            random.randint(0, 5),  # num_exports
-            random.uniform(0.5, 8.0)  # entropy
-        ]
-        extracted_features.append(label)  # Append the label (0 for benign, 1 for malware)
-        data.append(extracted_features)
-    return data
+app = Flask(__name__)
 
-# Generate data
-malware_data = generate_dataset(135, 1)  # 700 malware samples
-benign_data = generate_dataset(14, 0)   # 700 benign samples
+# Load the trained model
+model = joblib.load('malware_model.pkl')
 
-# Combine datasets
-columns = ['num_sections', 'num_imports', 'num_exports', 'entropy', 'label']
-full_dataset = pd.DataFrame(malware_data + benign_data, columns=columns)
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Process the file for malware detection
+    result = detect_malware(file)
+    
+    return jsonify({'result': result})
 
-# Save to CSV
-full_dataset.to_csv("malware.csv", index=False)
-print("Simulated dataset saved to malware.csv")
+def detect_malware(file):
+    # Extract features from the file using pefile
+    pe = pefile.PE(file)
+    features = extract_features(pe)
+    
+    # Predict using the loaded model
+    prediction = model.predict([features])
+    
+    return 'malicious' if prediction[0] == 1 else 'safe'
+
+def extract_features(pe):
+    # Implement feature extraction logic here
+    return []
+
+if __name__ == '__main__':
+    app.run(debug=True)
